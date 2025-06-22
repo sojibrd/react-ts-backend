@@ -2,6 +2,8 @@ import "reflect-metadata";
 import express from "express";
 import { DataSource } from "typeorm";
 import dotenv from "dotenv";
+import { User } from "./entity/User";
+import authRouter from "./routes/auth";
 
 dotenv.config();
 
@@ -18,7 +20,7 @@ export const AppDataSource = new DataSource({
   database: process.env.DB_NAME || "express_ts_db",
   synchronize: true, // Set to false in production
   logging: false,
-  entities: [], // Add entity files here
+  entities: [User], // Add entity files here
   migrations: [],
   subscribers: [],
 });
@@ -34,6 +36,8 @@ AppDataSource.initialize()
 app.get("/", (req, res) => {
   res.send("Hello World from Express + TypeScript + TypeORM!");
 });
+
+app.use("/auth", authRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
