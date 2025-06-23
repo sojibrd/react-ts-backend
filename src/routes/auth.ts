@@ -7,6 +7,7 @@ import passportGoogle, { Profile } from "passport-google-oauth20";
 import nodemailer from "nodemailer";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
+import { generalLimiter, loginLimiter } from "../middleware/rateLimiters";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -28,6 +29,9 @@ passport.use(
     }
   )
 );
+
+// Apply general rate limiter to all auth routes
+router.use(generalLimiter);
 
 // Register
 router.post("/register", async (req, res) => {
@@ -53,7 +57,7 @@ router.post("/register", async (req, res) => {
 });
 
 // Login
-router.post("/login", async (req, res) => {
+router.post("/login", loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) {
     return res
