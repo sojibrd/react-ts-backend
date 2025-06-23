@@ -9,6 +9,9 @@ import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import { generalLimiter, loginLimiter } from "../middleware/rateLimiters";
 import { UserService } from "../services/userService";
+import { RegisterDto, LoginDto } from "../dto/auth.dto";
+import { validate } from "class-validator";
+import { plainToInstance } from "class-transformer";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -36,12 +39,16 @@ router.use(generalLimiter);
 
 // Register
 router.post("/register", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res
-      .status(400)
-      .json({ message: "Email and password are required." });
+  const dto = plainToInstance(RegisterDto, req.body);
+  const errors = await validate(dto);
+  if (errors.length > 0) {
+    const constraints = errors[0].constraints;
+    const message = constraints
+      ? Object.values(constraints)[0]
+      : "Validation error";
+    return res.status(400).json({ message });
   }
+  const { email, password } = dto;
   try {
     await UserService.register(email, password);
     res.status(201).json({ message: "User registered successfully." });
@@ -55,12 +62,16 @@ router.post("/register", async (req, res) => {
 
 // Login
 router.post("/login", loginLimiter, async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res
-      .status(400)
-      .json({ message: "Email and password are required." });
+  const dto = plainToInstance(LoginDto, req.body);
+  const errors = await validate(dto);
+  if (errors.length > 0) {
+    const constraints = errors[0].constraints;
+    const message = constraints
+      ? Object.values(constraints)[0]
+      : "Validation error";
+    return res.status(400).json({ message });
   }
+  const { email, password } = dto;
   try {
     const user = await UserService.validateUser(email, password);
     if (!user) {
