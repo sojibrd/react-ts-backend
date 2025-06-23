@@ -70,7 +70,13 @@ router.post("/login", async (req, res) => {
     if (!valid) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
-    res.json({ message: "Login successful." });
+    // Set up the session using Passport
+    req.login(user, (err) => {
+      if (err) {
+        return res.status(500).json({ message: "Login failed.", error: err });
+      }
+      res.json({ message: "Login successful." });
+    });
   } catch (err) {
     res.status(500).json({ message: "Login failed.", error: err });
   }
@@ -192,7 +198,9 @@ router.post("/enable-mfa", async (req, res) => {
 router.post("/verify-mfa", async (req, res) => {
   const { email, token } = req.body;
   if (!email || !token) {
-    return res.status(400).json({ message: "Email and TOTP code are required." });
+    return res
+      .status(400)
+      .json({ message: "Email and TOTP code are required." });
   }
   try {
     const userRepo = AppDataSource.getRepository(User);
@@ -213,6 +221,39 @@ router.post("/verify-mfa", async (req, res) => {
   } catch (err) {
     res.status(500).json({ message: "MFA verification failed.", error: err });
   }
+});
+
+// Get all users
+router.get("/users", async (req, res) => {
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const users = await userRepo.find({
+      select: ["id", "email", "phone", "mfaEnabled", "createdAt", "updatedAt"],
+    });
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: "Failed to fetch users.", error: err });
+  }
+});
+
+// Get logged-in user
+router.get("/me", (req, res) => {
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
+    return res.status(401).json({ message: "Not authenticated." });
+  }
+  res.json({ user: req.user });
+});
+
+// Logout all users (current session)
+router.post("/logout-all", (req, res) => {
+  req.logout(function (err) {
+    if (err) {
+      return res.status(500).json({ message: "Logout failed.", error: err });
+    }
+    req.session.destroy(() => {
+      res.json({ message: "Logged out from all sessions." });
+    });
+  });
 });
 
 export default router;
