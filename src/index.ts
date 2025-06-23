@@ -60,7 +60,8 @@ app.get("/", (req, res) => {
   res.send("Hello World from Express + TypeScript + TypeORM!");
 });
 
-app.use("/auth", authRouter);
+// Example: versioned API route
+app.use("/api/v1/auth", authRouter);
 
 // 404 handler for unknown routes (must be before the global error handler)
 app.use((req, res, next) => {
