@@ -8,6 +8,7 @@ import nodemailer from "nodemailer";
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
 import { generalLimiter, loginLimiter } from "../middleware/rateLimiters";
+import { UserService } from "../services/userService";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -42,16 +43,12 @@ router.post("/register", async (req, res) => {
       .json({ message: "Email and password are required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const existing = await userRepo.findOneBy({ email });
-    if (existing) {
-      return res.status(409).json({ message: "Email already registered." });
-    }
-    const hashed = await bcrypt.hash(password, 10);
-    const user = userRepo.create({ email, password: hashed });
-    await userRepo.save(user);
+    await UserService.register(email, password);
     res.status(201).json({ message: "User registered successfully." });
-  } catch (err) {
+  } catch (err: any) {
+    if (err.message === "Email already registered.") {
+      return res.status(409).json({ message: err.message });
+    }
     res.status(500).json({ message: "Registration failed.", error: err });
   }
 });
@@ -65,13 +62,8 @@ router.post("/login", loginLimiter, async (req, res) => {
       .json({ message: "Email and password are required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOneBy({ email });
-    if (!user || !user.password) {
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) {
+    const user = await UserService.validateUser(email, password);
+    if (!user) {
       return res.status(401).json({ message: "Invalid credentials." });
     }
     // Set up the session using Passport
@@ -230,10 +222,7 @@ router.post("/verify-mfa", async (req, res) => {
 // Get all users
 router.get("/users", async (req, res) => {
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const users = await userRepo.find({
-      select: ["id", "email", "phone", "mfaEnabled", "createdAt", "updatedAt"],
-    });
+    const users = await UserService.getAllUsers();
     res.json(users);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch users.", error: err });
