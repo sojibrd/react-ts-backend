@@ -4,6 +4,7 @@ import { User } from "../entity/User";
 import bcrypt from "bcryptjs";
 import passport from "passport";
 import passportGoogle, { Profile } from "passport-google-oauth20";
+import nodemailer from "nodemailer";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -90,23 +91,45 @@ router.get(
 
 // Request OTP
 router.post("/request-otp", async (req, res) => {
-  const { phone } = req.body;
-  if (!phone) {
-    return res.status(400).json({ message: "Phone number is required." });
+  const { phone, email } = req.body;
+  if (!phone && !email) {
+    return res
+      .status(400)
+      .json({ message: "Phone number or email is required." });
   }
   try {
     const userRepo = AppDataSource.getRepository(User);
-    let user = await userRepo.findOneBy({ phone });
+    let user = phone
+      ? await userRepo.findOneBy({ phone })
+      : await userRepo.findOneBy({ email });
     if (!user) {
-      user = userRepo.create({ phone });
+      user = userRepo.create({ phone, email });
     }
     // Generate a 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     user.otp = otp;
     await userRepo.save(user);
-    // Placeholder: send OTP via SMS provider
-    console.log(`OTP for ${phone}: ${otp}`);
-    res.json({ message: "OTP sent (check console in dev mode)." });
+    // Send OTP via Gmail SMTP if email is provided
+    if (email) {
+      const transporter = nodemailer.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.GMAIL_USER,
+          pass: process.env.GMAIL_PASS,
+        },
+      });
+      await transporter.sendMail({
+        from: process.env.GMAIL_USER,
+        to: email,
+        subject: "Your OTP Code",
+        text: `Your OTP for login is: ${otp}`,
+      });
+      res.json({ message: "OTP sent to email." });
+    } else {
+      // Placeholder: send OTP via SMS provider
+      console.log(`OTP for ${phone}: ${otp}`);
+      res.json({ message: "OTP sent (check console in dev mode)." });
+    }
   } catch (err) {
     res.status(500).json({ message: "Failed to send OTP.", error: err });
   }
@@ -114,15 +137,19 @@ router.post("/request-otp", async (req, res) => {
 
 // Verify OTP
 router.post("/verify-otp", async (req, res) => {
-  const { phone, otp } = req.body;
-  if (!phone || !otp) {
-    return res.status(400).json({ message: "Phone and OTP are required." });
+  const { phone, email, otp } = req.body;
+  if ((!phone && !email) || !otp) {
+    return res
+      .status(400)
+      .json({ message: "Phone or email and OTP are required." });
   }
   try {
     const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOneBy({ phone });
+    const user = phone
+      ? await userRepo.findOneBy({ phone })
+      : await userRepo.findOneBy({ email });
     if (!user || user.otp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP or phone number." });
+      return res.status(401).json({ message: "Invalid OTP or user." });
     }
     // OTP verified, clear OTP
     user.otp = undefined;
