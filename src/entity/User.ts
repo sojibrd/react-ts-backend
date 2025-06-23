@@ -23,6 +23,12 @@ export class User {
   @Column({ nullable: true })
   otp?: string;
 
+  @Column({ default: false })
+  mfaEnabled!: boolean;
+
+  @Column({ nullable: true })
+  mfaSecret?: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 

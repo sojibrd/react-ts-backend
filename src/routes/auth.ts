@@ -5,6 +5,8 @@ import bcrypt from "bcryptjs";
 import passport from "passport";
 import passportGoogle, { Profile } from "passport-google-oauth20";
 import nodemailer from "nodemailer";
+import speakeasy from "speakeasy";
+import qrcode from "qrcode";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -157,6 +159,59 @@ router.post("/verify-otp", async (req, res) => {
     res.json({ message: "OTP verified. Login successful." });
   } catch (err) {
     res.status(500).json({ message: "OTP verification failed.", error: err });
+  }
+});
+
+// Enable MFA (TOTP)
+router.post("/enable-mfa", async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res.status(400).json({ message: "Email is required." });
+  }
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOneBy({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+    const secret = speakeasy.generateSecret({ name: `ExpressTS (${email})` });
+    user.mfaSecret = secret.base32;
+    await userRepo.save(user);
+    const qr = await qrcode.toDataURL(secret.otpauth_url!);
+    res.json({
+      message: "MFA enabled. Scan QR with Google Authenticator.",
+      qr,
+      secret: secret.base32,
+    });
+  } catch (err) {
+    res.status(500).json({ message: "Failed to enable MFA.", error: err });
+  }
+});
+
+// Verify MFA (TOTP)
+router.post("/verify-mfa", async (req, res) => {
+  const { email, token } = req.body;
+  if (!email || !token) {
+    return res.status(400).json({ message: "Email and TOTP code are required." });
+  }
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOneBy({ email });
+    if (!user || !user.mfaSecret) {
+      return res.status(404).json({ message: "User or MFA not found." });
+    }
+    console.log("Verifying TOTP", { secret: user.mfaSecret, token });
+    const verified = speakeasy.totp.verify({
+      secret: user.mfaSecret,
+      encoding: "base32",
+      token,
+    });
+    if (!verified) {
+      return res.status(401).json({ message: "Invalid TOTP code." });
+    }
+    res.json({ message: "MFA verified. Login successful." });
+  } catch (err) {
+    res.status(500).json({ message: "MFA verification failed.", error: err });
   }
 });
 
