@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { AuthController } from "../controllers/authController";
 import { AppDataSource } from "../index";
 import { User } from "../entity/User";
 import bcrypt from "bcryptjs";
@@ -15,6 +16,7 @@ import { plainToInstance } from "class-transformer";
 import logger from "../utils/logger";
 
 const router = Router();
+const authController = new AuthController();
 const GoogleStrategy = passportGoogle.Strategy;
 
 // Passport Google OAuth 2.0 strategy
@@ -38,59 +40,13 @@ passport.use(
 // Apply general rate limiter to all auth routes
 router.use(generalLimiter);
 
-// Register
-router.post("/register", async (req, res) => {
-  logger.info({ endpoint: "/register", body: req.body }, "Register attempt");
-  const dto = plainToInstance(RegisterDto, req.body);
-  const errors = await validate(dto);
-  if (errors.length > 0) {
-    const constraints = errors[0].constraints;
-    const message = constraints
-      ? Object.values(constraints)[0]
-      : "Validation error";
-    return res.status(400).json({ message });
-  }
-  const { email, password } = dto;
-  try {
-    await UserService.register(email, password);
-    res.status(201).json({ message: "User registered successfully." });
-  } catch (err: any) {
-    if (err.message === "Email already registered.") {
-      return res.status(409).json({ message: err.message });
-    }
-    res.status(500).json({ message: "Registration failed.", error: err });
-  }
-});
+// Register route
+router.post("/register", (req, res) => authController.register(req, res));
 
-// Login
-router.post("/login", loginLimiter, async (req, res) => {
-  logger.info({ endpoint: "/login", body: req.body }, "Login attempt");
-  const dto = plainToInstance(LoginDto, req.body);
-  const errors = await validate(dto);
-  if (errors.length > 0) {
-    const constraints = errors[0].constraints;
-    const message = constraints
-      ? Object.values(constraints)[0]
-      : "Validation error";
-    return res.status(400).json({ message });
-  }
-  const { email, password } = dto;
-  try {
-    const user = await UserService.validateUser(email, password);
-    if (!user) {
-      return res.status(401).json({ message: "Invalid credentials." });
-    }
-    // Set up the session using Passport
-    req.login(user, (err) => {
-      if (err) {
-        return res.status(500).json({ message: "Login failed.", error: err });
-      }
-      res.json({ message: "Login successful." });
-    });
-  } catch (err) {
-    res.status(500).json({ message: "Login failed.", error: err });
-  }
-});
+// Login route
+router.post("/login", loginLimiter, (req, res) =>
+  authController.login(req, res)
+);
 
 // Google OAuth 2.0 Social Login
 router.get(
