@@ -2,10 +2,11 @@ import "reflect-metadata";
 import express from "express";
 import { DataSource } from "typeorm";
 import dotenv from "dotenv";
+dotenv.config();
 import { User } from "./entity/User";
 import authRouter from "./routes/auth";
-
-dotenv.config();
+import session from "express-session";
+import passport from "passport";
 
 const app = express();
 app.use(express.json());
@@ -32,6 +33,26 @@ AppDataSource.initialize()
   .catch((err) => {
     console.error("Error during Data Source initialization", err);
   });
+
+app.use(
+  session({
+    secret: "your_secret_key", // use a strong secret in production!
+    resave: false,
+    saveUninitialized: false,
+  })
+);
+app.use(passport.initialize());
+app.use(passport.session());
+
+passport.serializeUser((user: any, done) => {
+  // You can customize what is stored in the session here
+  done(null, user);
+});
+
+passport.deserializeUser((obj: any, done) => {
+  // You can fetch user details from DB here if needed
+  done(null, obj);
+});
 
 app.get("/", (req, res) => {
   res.send("Hello World from Express + TypeScript + TypeORM!");
