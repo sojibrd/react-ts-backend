@@ -8,6 +8,7 @@ import authRouter from "./routes/auth";
 import session from "express-session";
 import passport from "passport";
 import type { Request, Response, NextFunction } from "express";
+import logger from "./utils/logger";
 
 const app = express();
 app.use(express.json());
@@ -70,7 +71,7 @@ app.use((req, res, next) => {
 
 // Global error handler
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  console.error(err);
+  logger.error(err);
   res.status(err.status || 500).json({
     message: err.message || "Internal Server Error",
     error: process.env.NODE_ENV === "production" ? undefined : err,

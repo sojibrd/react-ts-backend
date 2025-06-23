@@ -12,6 +12,7 @@ import { UserService } from "../services/userService";
 import { RegisterDto, LoginDto } from "../dto/auth.dto";
 import { validate } from "class-validator";
 import { plainToInstance } from "class-transformer";
+import logger from "../utils/logger";
 
 const router = Router();
 const GoogleStrategy = passportGoogle.Strategy;
@@ -39,6 +40,7 @@ router.use(generalLimiter);
 
 // Register
 router.post("/register", async (req, res) => {
+  logger.info({ endpoint: "/register", body: req.body }, "Register attempt");
   const dto = plainToInstance(RegisterDto, req.body);
   const errors = await validate(dto);
   if (errors.length > 0) {
@@ -62,6 +64,7 @@ router.post("/register", async (req, res) => {
 
 // Login
 router.post("/login", loginLimiter, async (req, res) => {
+  logger.info({ endpoint: "/login", body: req.body }, "Login attempt");
   const dto = plainToInstance(LoginDto, req.body);
   const errors = await validate(dto);
   if (errors.length > 0) {
@@ -92,20 +95,35 @@ router.post("/login", loginLimiter, async (req, res) => {
 // Google OAuth 2.0 Social Login
 router.get(
   "/oauth/google",
+  (req, res, next) => {
+    logger.info({ endpoint: "/oauth/google" }, "Google OAuth login start");
+    next();
+  },
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
 router.get(
   "/oauth/google/callback",
+  (req, res, next) => {
+    logger.info(
+      { endpoint: "/oauth/google/callback" },
+      "Google OAuth callback"
+    );
+    next();
+  },
   passport.authenticate("google", { failureRedirect: "/auth/login" }),
   (req, res) => {
-    // Successful authentication
+    logger.info(
+      { endpoint: "/oauth/google/callback", user: req.user },
+      "Google login successful"
+    );
     res.json({ message: "Google login successful", user: req.user });
   }
 );
 
 // Request OTP
 router.post("/request-otp", async (req, res) => {
+  logger.info({ endpoint: "/request-otp", body: req.body }, "OTP request");
   const { phone, email } = req.body;
   if (!phone && !email) {
     return res
@@ -152,6 +170,7 @@ router.post("/request-otp", async (req, res) => {
 
 // Verify OTP
 router.post("/verify-otp", async (req, res) => {
+  logger.info({ endpoint: "/verify-otp", body: req.body }, "OTP verify");
   const { phone, email, otp } = req.body;
   if ((!phone && !email) || !otp) {
     return res
@@ -177,6 +196,7 @@ router.post("/verify-otp", async (req, res) => {
 
 // Enable MFA (TOTP)
 router.post("/enable-mfa", async (req, res) => {
+  logger.info({ endpoint: "/enable-mfa", body: req.body }, "Enable MFA");
   const { email } = req.body;
   if (!email) {
     return res.status(400).json({ message: "Email is required." });
@@ -203,6 +223,7 @@ router.post("/enable-mfa", async (req, res) => {
 
 // Verify MFA (TOTP)
 router.post("/verify-mfa", async (req, res) => {
+  logger.info({ endpoint: "/verify-mfa", body: req.body }, "Verify MFA");
   const { email, token } = req.body;
   if (!email || !token) {
     return res
@@ -232,6 +253,7 @@ router.post("/verify-mfa", async (req, res) => {
 
 // Get all users
 router.get("/users", async (req, res) => {
+  logger.info({ endpoint: "/users" }, "Get all users");
   try {
     const users = await UserService.getAllUsers();
     res.json(users);
@@ -242,6 +264,7 @@ router.get("/users", async (req, res) => {
 
 // Get logged-in user
 router.get("/me", (req, res) => {
+  logger.info({ endpoint: "/me", user: req.user }, "Get logged-in user");
   if (!req.isAuthenticated || !req.isAuthenticated()) {
     return res.status(401).json({ message: "Not authenticated." });
   }
@@ -250,6 +273,7 @@ router.get("/me", (req, res) => {
 
 // Logout all users (current session)
 router.post("/logout-all", (req, res) => {
+  logger.info({ endpoint: "/logout-all", user: req.user }, "Logout all users");
   req.logout(function (err) {
     if (err) {
       return res.status(500).json({ message: "Logout failed.", error: err });
