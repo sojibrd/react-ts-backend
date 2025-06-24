@@ -1,4 +1,4 @@
-// Example: Define a common user type for use across modules
+// Shared user types and enums for project-wide use
 export interface IUser {
   id: number;
   email?: string;
@@ -8,14 +8,12 @@ export interface IUser {
   updatedAt: Date;
 }
 
-// Example: Add a shared enum for user roles
 export enum UserRole {
   ADMIN = "admin",
   USER = "user",
   GUEST = "guest",
 }
 
-// Example: Add a shared type for API response
 export interface ApiResponse<T = any> {
   success: boolean;
   message: string;
@@ -23,7 +21,6 @@ export interface ApiResponse<T = any> {
   error?: any;
 }
 
-// Example: Add a shared type for paginated results
 export interface PaginatedResult<T> {
   items: T[];
   total: number;
@@ -31,7 +28,6 @@ export interface PaginatedResult<T> {
   pageSize: number;
 }
 
-// Example: Add a shared type for JWT payload
 export interface JwtPayload {
   userId: number;
   email?: string;

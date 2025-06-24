@@ -1,14 +1,25 @@
 import { Request, Response } from "express";
 import { UserService } from "@users/user.service";
+import { sendSuccess, sendError } from "@shared/utils/responseHandler";
+import { ApiError } from "@shared/utils/apiError";
+import logger from "@shared/utils/logger";
 
 export class AuthController {
   async register(req: Request, res: Response) {
     try {
       const { email, password } = req.body;
       const user = await UserService.register(email, password);
-      res.status(201).json(user);
+      logger.info({ action: "register", user: user.email });
+      sendSuccess(res, user, "User registered successfully");
     } catch (error) {
-      res.status(400).json({ message: (error as Error).message });
+      logger.error(error);
+      sendError(
+        res,
+        error instanceof Error
+          ? error
+          : new ApiError(400, "Registration failed"),
+        400
+      );
     }
   }
 
@@ -17,17 +28,23 @@ export class AuthController {
       const { email, password } = req.body;
       const user = await UserService.validateUser(email, password);
       if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
+        return sendError(res, new ApiError(401, "Invalid credentials"), 401);
       }
-      // Establish session
       req.login(user, (err) => {
         if (err) {
-          return res.status(500).json({ message: "Session error", error: err });
+          logger.error(err);
+          return sendError(res, new ApiError(500, "Session error"), 500);
         }
-        res.status(200).json({ message: "Login successful", user });
+        logger.info({ action: "login", user: user.email });
+        sendSuccess(res, user, "Login successful");
       });
     } catch (error) {
-      res.status(401).json({ message: (error as Error).message });
+      logger.error(error);
+      sendError(
+        res,
+        error instanceof Error ? error : new ApiError(401, "Login failed"),
+        401
+      );
     }
   }
 }
