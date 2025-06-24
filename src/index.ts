@@ -47,6 +47,21 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
+// Add these lines for session support
+passport.serializeUser((user: any, done) => {
+  done(null, user.id); // store user id in session
+});
+
+passport.deserializeUser(async (id: number, done) => {
+  try {
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOneBy({ id });
+    done(null, user);
+  } catch (err) {
+    done(err);
+  }
+});
+
 registerPassportStrategies();
 
 app.get("/", (req, res) => {
