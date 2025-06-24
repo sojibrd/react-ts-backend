@@ -1,6 +1,7 @@
-import { AppDataSource } from "../../config/database";
+import { AppDataSource } from "@config/database";
 import { User } from "@users/user.entity";
 import bcrypt from "bcryptjs";
+import { addDays } from "@shared/common/helpers/dateHelper";
 
 export class UserService {
   static async register(email: string, password: string) {
@@ -30,8 +31,13 @@ export class UserService {
 
   static async getAllUsers() {
     const userRepo = AppDataSource.getRepository(User);
-    return userRepo.find({
+    const users = await userRepo.find({
       select: ["id", "email", "phone", "mfaEnabled", "createdAt", "updatedAt"],
     });
+    // Example: Add a trialExpiry date 30 days after creation for each user
+    return users.map((user) => ({
+      ...user,
+      trialExpiry: addDays(user.createdAt, 30),
+    }));
   }
 }
