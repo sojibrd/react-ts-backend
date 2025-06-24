@@ -1,6 +1,6 @@
+import { AppDataSource } from "@config/database";
+import { User } from "@users/user.entity";
 import nodemailer from "nodemailer";
-import { AppDataSource } from "../index";
-import { User } from "../entity/User";
 
 function normalizeEmail(email?: string) {
   return email ? email.trim().toLowerCase() : undefined;

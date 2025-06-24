@@ -1,93 +1,19 @@
 import "reflect-metadata";
-import express from "express";
-import { DataSource } from "typeorm";
 import dotenv from "dotenv";
 dotenv.config();
-import { User } from "./entity/User";
-import authRouter from "./routes/auth";
-import session from "express-session";
-import passport from "passport";
-import type { Request, Response, NextFunction } from "express";
-import logger from "./utils/logger";
-import { registerPassportStrategies } from "./strategies";
+import { connectDatabase } from "./config/database";
+import app from "./app";
 
-const app = express();
-app.use(express.json());
+const PORT = process.env.PORT || 3000;
 
-// TypeORM DataSource setup
-export const AppDataSource = new DataSource({
-  type: "postgres",
-  host: process.env.DB_HOST || "localhost",
-  port: +(process.env.DB_PORT || 5432),
-  username: process.env.DB_USER || "postgres",
-  password: process.env.DB_PASS || "postgres",
-  database: process.env.DB_NAME || "express_ts_db",
-  synchronize: true, // Set to false in production
-  logging: false,
-  entities: [User], // Add entity files here
-  migrations: [],
-  subscribers: [],
-});
-
-AppDataSource.initialize()
+connectDatabase()
   .then(() => {
     console.log("Data Source has been initialized!");
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
+    });
   })
   .catch((err) => {
     console.error("Error during Data Source initialization", err);
+    process.exit(1);
   });
-
-app.use(
-  session({
-    secret: "your_secret_key", // use a strong secret in production!
-    resave: false,
-    saveUninitialized: false,
-  })
-);
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Add these lines for session support
-passport.serializeUser((user: any, done) => {
-  done(null, user.id); // store user id in session
-});
-
-passport.deserializeUser(async (id: number, done) => {
-  try {
-    const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOneBy({ id });
-    done(null, user);
-  } catch (err) {
-    done(err);
-  }
-});
-
-registerPassportStrategies();
-
-app.get("/", (req, res) => {
-  res.send("Hello World from Express + TypeScript + TypeORM!");
-});
-
-// Example: versioned API route
-app.use("/api/v1/auth", authRouter);
-
-// 404 handler for unknown routes (must be before the global error handler)
-app.use((req, res, next) => {
-  const err = new Error(`Not Found: ${req.originalUrl}`);
-  (err as any).status = 404;
-  next(err);
-});
-
-// Global error handler
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  logger.error(err);
-  res.status(err.status || 500).json({
-    message: err.message || "Internal Server Error",
-    error: process.env.NODE_ENV === "production" ? undefined : err,
-  });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-});

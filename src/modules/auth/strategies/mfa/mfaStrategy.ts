@@ -1,7 +1,7 @@
 import speakeasy from "speakeasy";
 import qrcode from "qrcode";
-import { AppDataSource } from "../index";
-import { User } from "../entity/User";
+import { AppDataSource } from "@config/database";
+import { User } from "@users/user.entity";
 
 export async function enableMfa(email: string) {
   const userRepo = AppDataSource.getRepository(User);

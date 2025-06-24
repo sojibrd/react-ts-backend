@@ -1,5 +1,5 @@
 import passport from "passport";
-import { googleStrategy } from "./googleStrategy";
+import { googleStrategy } from "./google/googleStrategy";
 
 export function registerPassportStrategies() {
   passport.use(googleStrategy);

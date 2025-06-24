@@ -9,7 +9,14 @@
     "skipLibCheck": true,
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": "src",
+    "paths": {
+      "@users/*": ["modules/users/*"],
+      "@auth/*": ["modules/auth/*"],
+      "@shared/*": ["shared/*"],
+      "@config/*": ["config/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]
