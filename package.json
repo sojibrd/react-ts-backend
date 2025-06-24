@@ -6,6 +6,7 @@
     "dev": "nodemon --exec ts-node -r tsconfig-paths/register src/index.ts",
     "build": "tsc",
     "start": "ts-node src/index.ts",
+    "seed": "ts-node -r tsconfig-paths/register src/seeds/user.seed.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
