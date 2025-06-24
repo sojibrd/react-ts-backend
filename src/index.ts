@@ -9,6 +9,7 @@ import session from "express-session";
 import passport from "passport";
 import type { Request, Response, NextFunction } from "express";
 import logger from "./utils/logger";
+import { registerPassportStrategies } from "./strategies";
 
 const app = express();
 app.use(express.json());
@@ -46,15 +47,7 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-passport.serializeUser((user: any, done) => {
-  // You can customize what is stored in the session here
-  done(null, user);
-});
-
-passport.deserializeUser((obj: any, done) => {
-  // You can fetch user details from DB here if needed
-  done(null, obj);
-});
+registerPassportStrategies();
 
 app.get("/", (req, res) => {
   res.send("Hello World from Express + TypeScript + TypeORM!");

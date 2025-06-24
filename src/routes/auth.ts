@@ -1,41 +1,18 @@
 import { Router } from "express";
 import { AuthController } from "../controllers/authController";
-import { AppDataSource } from "../index";
-import { User } from "../entity/User";
-import bcrypt from "bcryptjs";
 import passport from "passport";
-import passportGoogle, { Profile } from "passport-google-oauth20";
-import nodemailer from "nodemailer";
-import speakeasy from "speakeasy";
-import qrcode from "qrcode";
 import { generalLimiter, loginLimiter } from "../middleware/rateLimiters";
 import { UserService } from "../services/userService";
-import { RegisterDto, LoginDto } from "../dto/auth.dto";
-import { validate } from "class-validator";
-import { plainToInstance } from "class-transformer";
 import logger from "../utils/logger";
+import { generateAndSendOtp, verifyOtp } from "../strategies/otpStrategy";
+import { enableMfa, verifyMfa } from "../strategies/mfaStrategy";
 
 const router = Router();
 const authController = new AuthController();
-const GoogleStrategy = passportGoogle.Strategy;
 
-// Passport Google OAuth 2.0 strategy
-passport.use(
-  new GoogleStrategy(
-    {
-      clientID: process.env.GOOGLE_CLIENT_ID || "GOOGLE_CLIENT_ID",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || "GOOGLE_CLIENT_SECRET",
-      callbackURL:
-        process.env.GOOGLE_CALLBACK_URL ||
-        "http://localhost:3000/auth/oauth/google/callback",
-    },
-    async (accessToken, refreshToken, profile: Profile, done) => {
-      // Here you would find or create a user in your DB
-      // For now, just pass the profile
-      return done(null, profile);
-    }
-  )
-);
+// Register Passport strategies (Google, etc.)
+import { registerPassportStrategies } from "../strategies";
+registerPassportStrategies();
 
 // Apply general rate limiter to all auth routes
 router.use(generalLimiter);
@@ -87,38 +64,8 @@ router.post("/request-otp", async (req, res) => {
       .json({ message: "Phone number or email is required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    let user = phone
-      ? await userRepo.findOneBy({ phone })
-      : await userRepo.findOneBy({ email });
-    if (!user) {
-      user = userRepo.create({ phone, email });
-    }
-    // Generate a 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    user.otp = otp;
-    await userRepo.save(user);
-    // Send OTP via Gmail SMTP if email is provided
-    if (email) {
-      const transporter = nodemailer.createTransport({
-        service: "gmail",
-        auth: {
-          user: process.env.GMAIL_USER,
-          pass: process.env.GMAIL_PASS,
-        },
-      });
-      await transporter.sendMail({
-        from: process.env.GMAIL_USER,
-        to: email,
-        subject: "Your OTP Code",
-        text: `Your OTP for login is: ${otp}`,
-      });
-      res.json({ message: "OTP sent to email." });
-    } else {
-      // Placeholder: send OTP via SMS provider
-      console.log(`OTP for ${phone}: ${otp}`);
-      res.json({ message: "OTP sent (check console in dev mode)." });
-    }
+    const result = await generateAndSendOtp({ phone, email });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: "Failed to send OTP.", error: err });
   }
@@ -134,17 +81,11 @@ router.post("/verify-otp", async (req, res) => {
       .json({ message: "Phone or email and OTP are required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const user = phone
-      ? await userRepo.findOneBy({ phone })
-      : await userRepo.findOneBy({ email });
-    if (!user || user.otp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP or user." });
+    const result = await verifyOtp({ phone, email, otp });
+    if (!result.valid) {
+      return res.status(401).json({ message: result.message });
     }
-    // OTP verified, clear OTP
-    user.otp = undefined;
-    await userRepo.save(user);
-    res.json({ message: "OTP verified. Login successful." });
+    res.json({ message: result.message });
   } catch (err) {
     res.status(500).json({ message: "OTP verification failed.", error: err });
   }
@@ -158,20 +99,11 @@ router.post("/enable-mfa", async (req, res) => {
     return res.status(400).json({ message: "Email is required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOneBy({ email });
-    if (!user) {
-      return res.status(404).json({ message: "User not found." });
+    const result = await enableMfa(email);
+    if (!result.success) {
+      return res.status(404).json({ message: result.message });
     }
-    const secret = speakeasy.generateSecret({ name: `ExpressTS (${email})` });
-    user.mfaSecret = secret.base32;
-    await userRepo.save(user);
-    const qr = await qrcode.toDataURL(secret.otpauth_url!);
-    res.json({
-      message: "MFA enabled. Scan QR with Google Authenticator.",
-      qr,
-      secret: secret.base32,
-    });
+    res.json(result);
   } catch (err) {
     res.status(500).json({ message: "Failed to enable MFA.", error: err });
   }
@@ -187,21 +119,11 @@ router.post("/verify-mfa", async (req, res) => {
       .json({ message: "Email and TOTP code are required." });
   }
   try {
-    const userRepo = AppDataSource.getRepository(User);
-    const user = await userRepo.findOneBy({ email });
-    if (!user || !user.mfaSecret) {
-      return res.status(404).json({ message: "User or MFA not found." });
+    const result = await verifyMfa(email, token);
+    if (!result.success) {
+      return res.status(401).json({ message: result.message });
     }
-    console.log("Verifying TOTP", { secret: user.mfaSecret, token });
-    const verified = speakeasy.totp.verify({
-      secret: user.mfaSecret,
-      encoding: "base32",
-      token,
-    });
-    if (!verified) {
-      return res.status(401).json({ message: "Invalid TOTP code." });
-    }
-    res.json({ message: "MFA verified. Login successful." });
+    res.json({ message: result.message });
   } catch (err) {
     res.status(500).json({ message: "MFA verification failed.", error: err });
   }
@@ -228,7 +150,7 @@ router.get("/me", (req, res) => {
 });
 
 // Logout all users (current session)
-router.post("/logout-all", (req, res) => {
+router.get("/logout-all", (req, res) => {
   logger.info({ endpoint: "/logout-all", user: req.user }, "Logout all users");
   req.logout(function (err) {
     if (err) {
